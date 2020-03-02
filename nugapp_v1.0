@@ -1,0 +1,226 @@
+library(shiny)
+library(scales)
+library(ggplot2)
+library(readr)
+library(magrittr)
+library(formattable)
+library(tidyverse)
+
+credit <- read_csv("~/zzz/nug/nugapp/Credit.csv")
+credit$result <- NA
+
+ui <- fluidPage(
+    
+    titlePanel("Credit Data prediction - classification example"),
+    
+    #настраиваем ползунки и переключалки
+    sidebarLayout(
+        sidebarPanel(
+            
+            sliderInput("se",
+                        "Seniority:",
+                        min = 0,
+                        max = 50,
+                        value = c(10,30)),
+            
+            selectInput("ho",
+                        "Home:",
+                        choices = c("owner", "rent", "parents", "ignore", "priv", "other")),
+            
+            sliderInput("ti",
+                        "Time:",
+                        min = 6,
+                        max = 72,
+                        value = c(12,36)),
+            
+            sliderInput("ag",
+                        "Age:",
+                        min = 13,
+                        max = 63,
+                        value = c(18,55)),
+            
+            selectInput("ma",
+                        "Marital:",
+                        choices = c("married", "single", "separated", "divorced", "widow")),
+            
+            radioButtons("re", "Records:", choices = c("no_rec", "yes_rec")),
+            
+            selectInput("jo",
+                        "Job:",
+                        choices = c("fixed", "freelance", "partime", "others")),
+            
+            sliderInput("ex",
+                        "Expirience:",
+                        min = 35,
+                        max = 180,
+                        value = c(60,120)),
+            
+            sliderInput("inco",
+                        "Income:",
+                        min = 1,
+                        max = 959,
+                        value = c(20,500)),
+            
+            sliderInput("as",
+                        "Assets:",
+                        min = 0,
+                        max = 300000,
+                        value = c(0,100000)),
+            
+            sliderInput("de",
+                        "Debt:",
+                        min = 0,
+                        max = 30000,
+                        value = c(0,12000)),
+            
+            sliderInput("am",
+                        "Amount:",
+                        min = 100,
+                        max = 5000,
+                        value = c(1000,5000)),
+            
+            sliderInput("bu",
+                        "Budget:",
+                        min = 105,
+                        max = 11140,
+                        value = c(200,7000)),
+            
+            actionButton("update", "Update"))
+        ,
+        
+        #тут будет пайчарт
+        mainPanel(
+            plotOutput("diepie")
+            
+        )
+    )
+)
+        
+server <- function(input, output) {
+    
+    diepie <- eventReactive(input$update, {output$diepie})
+        
+        output$diepie <- renderPlot({
+        
+        #фильтруем базар по значениям ползунков, если всё сходится - пишем 1 в резалт
+        
+        credit$result = ifelse( credit$Seniority <= input$se[2] &
+                        credit$Seniority >= input$se[1] &
+                        credit$Marital == input$ma &
+                        credit$Home == input$ho &
+                        credit$Time <= input$ti[2] &
+                        credit$Time >= input$ti[1] &
+                        credit$Age <= input$ag[2] &
+                        credit$Age >= input$ag[1] &
+                        credit$Records == input$re &
+                        credit$Job == input$jo &
+                        credit$Expenses <= input$ex[2] &
+                        credit$Expenses >= input$ex[1] &
+                        credit$Income <= input$inco[2] &
+                        credit$Income >= input$inco[1] &
+                        credit$Debt <= input$de[2] &
+                        credit$Debt >= input$de[1] &
+                        credit$Assets <= input$as[2] &
+                        credit$Assets >= input$as[1] &
+                        credit$Amount <= input$am[2] &
+                        credit$Amount >= input$am[1] &
+                        credit$Budget <= input$bu[2] &
+                        credit$Budget >= input$bu[1], credit$result <- "YES", credit$result <-"NO")
+        
+        credit1 = credit %>% 
+            group_by(result) %>% 
+            summarise(numb = n()) 
+        
+            pie = ggplot(data = credit1) + 
+            geom_bar(aes(x = "", y = numb, fill = result), stat = 'identity') +  
+            coord_polar("y", start=0)
+            
+        blank_theme <- theme_minimal()+
+            theme(
+                axis.title.x = element_blank(),
+                axis.title.y = element_blank(),
+                panel.border = element_blank(),
+                panel.grid=element_blank(),
+                axis.ticks = element_blank(),
+                plot.title=element_text(size=14, face="bold")
+            )
+
+        pie + scale_fill_brewer("RdYlBu") + blank_theme +
+            theme(axis.text.x=element_blank())+
+            geom_text(aes(x = "", y = numb/3 + c(0, cumsum(numb)[-length(numb)]),
+                          label = percent(numb/100)), size=7)
+    })
+
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+
+
+
+#Черновик
+
+# credit$Seniority = cut(credit$Seniority, breaks = c(-0.1,1,5,15,50),
+#                        ordered_result = T)
+# credit$Time = cut(credit$Time, breaks = c(0,12,36,60, Inf),
+#                   ordered_result = T)
+# credit$Age = cut(credit$Age, breaks = c(0,20,35, 50, Inf),
+#                  ordered_result = T)
+# credit$Expenses = cut(credit$Expenses, breaks = c(0,40,60,Inf),
+#                       ordered_result = T)
+# credit$Income = cut(credit$Income, breaks = c(0,100,150,Inf),
+#                     ordered_result = T)
+# credit$Assets = cut(credit$Assets, breaks = c(-0.1,3000,10000,Inf),
+#                     ordered_result = T)
+# credit$Debt = cut(credit$Debt, breaks = c(-0.1,500,Inf),
+#                   ordered_result = T)
+# credit$Amount = cut(credit$Amount, breaks = c(0,1000,2000,Inf),
+#                     ordered_result = T)
+# credit$Budget = cut(credit$Budget, breaks = c(0,500,1500,Inf),
+#                     ordered_result = T)
+
+
+# conditionalPanel("input.n >= 50",
+#                  plotOutput("scatterPlot", height = 300)
+
+
+# server = function(input, output) {
+#     
+#     output$coolplot <- renderPlot({
+#         filtered <-
+#             database %>%
+#             filter(bd <= input$ageInput[1],
+#                    actual_amount_paid <= input$amountPaid[2],
+#                    actual_amount_paid >= input$amountPaid[1]
+
+
+# credit$result = case_when(
+#     credit$Seniority <= input$se[2],
+#     credit$Seniority >= input$se[1],
+#     credit$Home == input$ho,
+#     credit$Time <= input$ti[2],
+#     credit$Time >= input$ti[1],
+#     credit$Age <= input$ag[2],
+#     credit$Age >= input$ag[1],
+#     credit$Records %in% input$re,
+#     credit$Job %in% input$jo,
+#     credit$Expenses <= input$ex[2],
+#     credit$Expenses >= input$ex[1],
+#     credit$Income <= input$inco[2],
+#     credit$Income >= input$inco[1],
+#     credit$Debt <= input$de[2],
+#     credit$Debt >= input$de[1],
+#     credit$Assets <= input$as[2],
+#     credit$Assets >= input$as[1],
+#     credit$Amount <= input$am[2],
+#     credit$Amount >= input$am[1],
+#     credit$Budget <= input$bu[2],
+#     credit$Budget >= input$bu[1],
+#            TRUE ~ 0)
+
+# output$coolplot <- renderPlot({
+#     filtered <-
+#         database %>%
+#         filter(bd <= input$ageInput[1],
+#                actual_amount_paid <= input$amountPaid[2],
+#                actual_amount_paid >= input$amountPaid[1]
