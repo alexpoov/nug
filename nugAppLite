@@ -1,19 +1,24 @@
+library(tidyverse)
+library(rlang)
 library(shiny)
 library(scales)
-library(magrittr)
-library(tidyverse)
-library(stringr)
+library(skimr)
 
 credit <- read_csv("Credit.csv")
 credit$result <- NA
+credit$Home = as.factor(credit$Home)
+credit$Marital = as.factor(credit$Marital)
+credit$Records = as.factor(credit$Records)
+credit$Job = as.factor(credit$Job)
+
 
 ui <- fluidPage(
     
       titlePanel("Прогнозирование кредитных данных"),
     
       sidebarLayout(
-             sidebarPanel(
-                    textAreaInput("rule", "Правило для выдачи кредита:"),
+             sidebarPanel(h4("Здесь вам нужно создать некоторые правила, чтобы решить, давать ли кредиты людям."),
+                    textAreaInput("rule", "Правило для выдачи кредита:", value='Age > 45 & Home %in% c("owner", "rent") ~ 1, TRUE ~ 0'),
 
                      actionButton("go", "Применить",
                      style = "background-color:#1BB300;
@@ -22,39 +27,50 @@ ui <- fluidPage(
                               border-style:solid;
                               border-width:2px;
                               border-radius:5%;
-                              
-                              font-size:18px;")),
 
-              mainPanel( 
-                     "Здесь вам нужно создать некоторые правила, чтобы решить, давать ли кредиты людям. 
-                      Для этого используйте левую текстовую панель",
-                      "Пример правила: Seniority > 8 | Job == 'fixed' ~ 1,TRUE ~ 0",
-                      
-                      textOutput("diepierule"),
+                              font-size:18px;"),
+                    
+                    plotOutput("diepie")),
+
+              mainPanel(h4("Описание переменных датасета: 4 категориальных и 9 количественных переменных"),
+                        
+                        verbatimTextOutput("ski")
                      
-                      plotOutput("diepie")
-            
         )
     )
 )
 
+#var1
+#rule = eventReactive(input$go, {quos(gsub(",",";",input$rule))})
+#   dataAll = credit %>% 
+#   mutate(result = case_when(!!!rlang::parse_exprs(rule)))
+
+#var2
+#rule = eventReactive(input$go, {quos(input$rule)})
+#   dataAll = credit %>% 
+#   mutate(result = !!parse_expr(paste0("case_when(", rule(), ")")))
+
 server <- function(input, output) {
   
     #тут реактивность, чтобы кнопочка срабатывала  
-    rule = eventReactive(input$go, {enquo(input$rule)})
+    rule = eventReactive(input$go, {input$rule})
     
-    #тут а-ля тестовая строка, чтобы просто правило текстом высветило 
-    output$diepierule <- renderPrint({!!rule()})
+    utlt = credit %>%
+      skim() %>% 
+      filter(skim_type %in% c("numeric", "factor"))
     
+    output$ski <- renderPrint({utlt %>% 
+        partition()})
+      
     #тут график
     output$diepie <- renderPlot({
-
+      
       #сюда вставляется правило+
-      dataAll = credit %>% mutate(
-        result = case_when(!!!rule())) %>%
-        group_by(result) %>%
-        summarise(numb = n())
-
+      dataAll = credit %>% 
+          mutate(result = !!parse_expr(paste0("case_when(", rule(), ")")))
+      
+      dataAll = dataAll %>%  group_by(result) %>% summarise(numb = n())
+      
       pie = ggplot(data = dataAll) +
         geom_bar(aes(x = "", y = numb, fill = as.factor(result)), stat = 'identity') +
         coord_polar("y", start=0)
@@ -63,19 +79,15 @@ server <- function(input, output) {
         theme(
           axis.title.x = element_blank(),
           axis.title.y = element_blank(),
-          panel.border = element_blank(),
-          panel.grid=element_blank(),
-          axis.ticks = element_blank(),
-          plot.title=element_text(size=14, face="bold")
-        )
+          plot.title=element_text(size=14, face="bold"))
 
-      pie + scale_fill_brewer("RdYlBu") + blank_theme +
+      pie + scale_fill_brewer(name = 'Кредит:', labels=c("- не выдали", "- выдали")) + blank_theme +
         theme(axis.text.x=element_blank())+
-        geom_text(aes(x = "", y = numb/3 + c(0, cumsum(numb)[-length(numb)]),
+        geom_text(aes(x = "", y = numb/3 + c(0,cumsum(numb)[-length(numb)]),
                       label = percent(numb/4446)), size=7)
-
+    
     })
-  
+    
 }
 
 shinyApp(ui = ui, server = server)
